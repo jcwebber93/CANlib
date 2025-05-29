@@ -165,6 +165,7 @@ public:
 	static constexpr CanAddress MasterAddress = 0;							// main boards (except ATE main boards) have address 0
 	static constexpr CanAddress ATECMBoardFirstAddress = 90;
 	static constexpr CanAddress ATEIOBoardFirstAddress = 95;
+	static constexpr CanAddress FeatherM4CANDefaultAddress = 104;
 	static constexpr CanAddress ATECMBoardDefaultAddress = 118;
 	static constexpr CanAddress ATEIOBoardDefaultAddress = 119;
 	static constexpr CanAddress SZPDefaultAddress = 120;
