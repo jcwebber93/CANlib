@@ -92,6 +92,8 @@ constexpr ParamDescriptor M569Point1Params[] =
 	FLOAT_PARAM('V'),					// velocity feedforward term added in 3.5beta2
 	FLOAT_PARAM('A'),					// acceleration feedforward term added in 3.5beta4
 	FLOAT_PARAM('Q'),					// torque constant in Nm per A added in 3.5 post beta4
+	FLOAT_PARAM('J'),					// J
+//	FLOAT_PARAM('L'),					// Velocity I
 	END_PARAMS
 };
 

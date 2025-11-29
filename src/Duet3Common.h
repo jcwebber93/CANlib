@@ -86,6 +86,10 @@ constexpr uint16_t CL_RECORD_COIL_A_CURRENT 				= 1u << 11;
 constexpr uint16_t CL_RECORD_COIL_B_CURRENT 				= 1u << 12;
 constexpr uint16_t CL_RECORD_PID_V_TERM 					= 1u << 13;
 constexpr uint16_t CL_RECORD_PID_A_TERM 					= 1u << 14;
+constexpr uint16_t CL_RECORD_PID_J_TERM						= 1u << 15;
+constexpr uint32_t CL_RECORD_MEASURED_VELOCITY				= 1u << 16;
+
+//
 
 #ifndef FLOAT16_T_DEFINED
 # define FLOAT16_T_DEFINED
@@ -96,10 +100,10 @@ typedef __fp16 float16_t;			///< A 16-bit floating point type
 // We can fit 56 bytes of data in each CAN data sample message.
 
 // Calculate how much data there is from the bitmap of data to collect
-constexpr uint8_t ClosedLoopSampleLength(uint16_t valuesToCollect) noexcept
+constexpr uint8_t ClosedLoopSampleLength(uint32_t valuesToCollect) noexcept
 {
 	// Size of each data item, in the same order as the CL_RECORD_ values declared in Duet3Common.h
-	constexpr uint8_t ClosedLoopDataSizes[16] =
+	constexpr uint8_t ClosedLoopDataSizes[17] =
 	{
 		sizeof(int32_t),	// raw encoder reading
 		sizeof(float),		// current motor steps
@@ -116,11 +120,12 @@ constexpr uint8_t ClosedLoopSampleLength(uint16_t valuesToCollect) noexcept
 		sizeof(int16_t),	// coil B current
 		sizeof(float16_t),	// PID V term
 		sizeof(float16_t),	// PID A term
-		0					// unused
+		sizeof(float16_t),	// PID J term
+		sizeof(float16_t)	// Velocity term
 	};
 
 	uint8_t ret = sizeof(float);									// space for the time stamp
-	for (unsigned int i = 0; valuesToCollect != 0 ; ++i)
+	for (unsigned int i = 0; i < ARRAY_SIZE(ClosedLoopDataSizes) && valuesToCollect != 0; ++i)
 	{
 		if (valuesToCollect & 1u)
 		{
@@ -131,6 +136,6 @@ constexpr uint8_t ClosedLoopSampleLength(uint16_t valuesToCollect) noexcept
 	return ret;
 }
 
-constexpr size_t MaxClosedLoopSampleLength = ClosedLoopSampleLength(0xFFFF);
+constexpr size_t MaxClosedLoopSampleLength = ClosedLoopSampleLength(0x1FFFF);
 
 #endif /* SRC_DUET3COMMON_H_ */
