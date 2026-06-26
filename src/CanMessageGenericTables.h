@@ -94,6 +94,9 @@ constexpr ParamDescriptor M569Point1Params[] =
 	FLOAT_PARAM('Q'),					// torque constant in Nm per A added in 3.5 post beta4
 	FLOAT_PARAM('J'),					// J
 //	FLOAT_PARAM('L'),					// Velocity I
+	UINT8_PARAM('U'),					// tmc servo select
+	FLOAT_PARAM('W'),					// current
+	UINT8_PARAM('Z'),					// tmc phase select
 	REDUCED_STRING_PARAM('Y'),			// magnetic encoder type, added at 3.6.2
 	END_PARAMS
 };
