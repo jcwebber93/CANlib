@@ -540,12 +540,12 @@ struct __attribute__((packed)) CanMessageStartClosedLoopDataCollection
 
 	uint16_t requestId : 12,
 			 zero1 : 4;
-	uint16_t rate;							// The sample rate at which to collect
-	uint16_t filter;						// what variables to collect;
 	uint8_t  deviceNumber;					// The device to collect data for
 	uint8_t  mode;							// the mode to collect in
+	uint16_t rate;							// The sample rate at which to collect
 	uint16_t numSamples;					// how many samples to collect
 	uint8_t  movement;						// Which (if any) movement was requested
+	uint32_t filter;						// what variables to collect;
 
 	void SetRequestId(CanRequestId rid) noexcept { requestId = rid; zero1 = 0;}
 };
@@ -1247,14 +1247,13 @@ struct __attribute__((packed)) CanMessageClosedLoopData
 {
 	static constexpr CanMessageType messageType = CanMessageType::closedLoopData;
 
-	uint32_t numSamples : 5,				// number of samples in this data packet
-			 lastPacket : 1,				// set if this is the last packet
-			 filter : 16,					// which variables are present in the data packet
-			 overflowed : 1,				// true if there was buffer overflow
-			 badSample : 1,					// true if we had a bad sample (should not happen)
-			 zero : 8;						// Currently unused
 	uint32_t firstSampleNumber: 20,			// the number of the first sample
-			 zero2: 12;						// Currently unused
+			 numSamples : 5,				// number of samples in this data packet
+			 lastPacket : 1,				// set if this is the last packet
+			 overflowed : 1,				// true if there was buffer overflow
+			 badSample : 1,
+			 zero : 4;
+	uint32_t filter;
 	uint8_t  data[56];
 
 	// Get the actual amount of data
@@ -1269,7 +1268,7 @@ struct __attribute__((packed)) CanMessageClosedLoopData
 		return msglen - 2 * sizeof(uint32_t);
 	}
 
-	void ClearReservedFields() noexcept { zero = 0; zero2 = 0; }
+	void ClearReservedFields() noexcept { zero = 0; }
 };
 
 // Message sent by an expansion board to the main board to indicate an event
