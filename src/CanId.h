@@ -117,6 +117,7 @@ enum class CanMessageType : uint16_t
 	setHeaterTemperatureV1 = 6068,				// added in RRF 3.7
 	heaterModelV3 = 6069,						// added in RRF 3.7
 	setPressureAdvanceV2 = 6070,
+	setConnectionTimeout = 6071,				// for M959, added in RRF 3.7
 
 	// Responses, broadcasts etc. sent by expansion boards
 	standardReply = 4510,
@@ -175,6 +176,8 @@ public:
 	static constexpr CanAddress ATECMBoardFirstAddress = 90;
 	static constexpr CanAddress ATEIOBoardFirstAddress = 95;
 	static constexpr CanAddress FeatherM4CANDefaultAddress = 104;
+	static constexpr CanAddress DP3EXBDefaultAddress = 105;
+	static constexpr CanAddress SAMME51DefaultAddress = 106;
 	static constexpr CanAddress ATECMBoardDefaultAddress = 118;
 	static constexpr CanAddress ATEIOBoardDefaultAddress = 119;
 	static constexpr CanAddress SZPDefaultAddress = 120;
