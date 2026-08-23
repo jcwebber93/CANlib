@@ -71,24 +71,45 @@ enum class FirmwareFlashErrorCode : unsigned int
 	noTimeSyncMessageSeen = 17			// bootloader didn't hear a clock message at any of the standard speeds (added for new bootloader)
 };
 
-// Variables available for recording in closed-loop mode
-constexpr uint16_t CL_RECORD_RAW_ENCODER_READING 			= 1u << 0;
-constexpr uint16_t CL_RECORD_CURRENT_MOTOR_STEPS 			= 1u << 1;
-constexpr uint16_t CL_RECORD_TARGET_MOTOR_STEPS 			= 1u << 2;
-constexpr uint16_t CL_RECORD_CURRENT_ERROR 					= 1u << 3;
-constexpr uint16_t CL_RECORD_PID_CONTROL_SIGNAL 			= 1u << 4;
-constexpr uint16_t CL_RECORD_PID_P_TERM 					= 1u << 5;
-constexpr uint16_t CL_RECORD_PID_I_TERM 					= 1u << 6;
-constexpr uint16_t CL_RECORD_PID_D_TERM 					= 1u << 7;
-constexpr uint16_t CL_RECORD_CURRENT_STEP_PHASE 			= 1u << 8;
-constexpr uint16_t CL_RECORD_DESIRED_STEP_PHASE 			= 1u << 9;
-constexpr uint16_t CL_RECORD_PHASE_SHIFT 					= 1u << 10;
-constexpr uint16_t CL_RECORD_COIL_A_CURRENT 				= 1u << 11;
-constexpr uint16_t CL_RECORD_COIL_B_CURRENT 				= 1u << 12;
-constexpr uint16_t CL_RECORD_PID_V_TERM 					= 1u << 13;
-constexpr uint16_t CL_RECORD_PID_A_TERM 					= 1u << 14;
-constexpr uint16_t CL_RECORD_PID_J_TERM						= 1u << 15;
+// Variables available for recording in closed-loop mode.
+//
+// INVARIANT: bit order == the order of ClosedLoopDataSizes[] below == the order fields are written to the
+// wire by the expansion board == the order they are read back and named by the main board. Four separate
+// lists depend on it (Duet3Expansion CollectSample(), and both the heading writer and the decoder in
+// RepRapFirmware's ClosedLoop.cpp). Append new channels at the END and nowhere else; reordering them to
+// suit a display layout is what stalled the previous attempt to extend this.
+//
+// All of these are uint32_t. They used to be uint16_t up to bit 15 with bit 16 promoted to uint32_t,
+// which is a silent-truncation hazard the moment anything holds one in the narrower type.
+constexpr uint32_t CL_RECORD_RAW_ENCODER_READING 			= 1u << 0;
+constexpr uint32_t CL_RECORD_CURRENT_MOTOR_STEPS 			= 1u << 1;
+constexpr uint32_t CL_RECORD_TARGET_MOTOR_STEPS 			= 1u << 2;
+constexpr uint32_t CL_RECORD_CURRENT_ERROR 					= 1u << 3;
+constexpr uint32_t CL_RECORD_PID_CONTROL_SIGNAL 			= 1u << 4;
+constexpr uint32_t CL_RECORD_PID_P_TERM 					= 1u << 5;
+constexpr uint32_t CL_RECORD_PID_I_TERM 					= 1u << 6;
+constexpr uint32_t CL_RECORD_PID_D_TERM 					= 1u << 7;
+constexpr uint32_t CL_RECORD_CURRENT_STEP_PHASE 			= 1u << 8;
+constexpr uint32_t CL_RECORD_DESIRED_STEP_PHASE 			= 1u << 9;
+constexpr uint32_t CL_RECORD_PHASE_SHIFT 					= 1u << 10;
+constexpr uint32_t CL_RECORD_COIL_A_CURRENT 				= 1u << 11;
+constexpr uint32_t CL_RECORD_COIL_B_CURRENT 				= 1u << 12;
+constexpr uint32_t CL_RECORD_PID_V_TERM 					= 1u << 13;
+constexpr uint32_t CL_RECORD_PID_A_TERM 					= 1u << 14;
+constexpr uint32_t CL_RECORD_PID_J_TERM						= 1u << 15;
 constexpr uint32_t CL_RECORD_MEASURED_VELOCITY				= 1u << 16;
+// FOC/BLDC current-mode channels. Populated by the DRV8316 inline current-sense path; they read 0 on
+// drives that have no current sensing.
+constexpr uint32_t CL_RECORD_PHASE_CURRENT_A				= 1u << 17;
+constexpr uint32_t CL_RECORD_PHASE_CURRENT_B				= 1u << 18;
+constexpr uint32_t CL_RECORD_PHASE_CURRENT_C				= 1u << 19;
+constexpr uint32_t CL_RECORD_CURRENT_D						= 1u << 20;
+constexpr uint32_t CL_RECORD_CURRENT_Q						= 1u << 21;
+constexpr uint32_t CL_RECORD_VOLTAGE_D						= 1u << 22;
+constexpr uint32_t CL_RECORD_VOLTAGE_Q						= 1u << 23;
+
+constexpr unsigned int NumClosedLoopRecordChannels = 24;
+constexpr uint32_t CL_RECORD_ALL = (1u << NumClosedLoopRecordChannels) - 1u;
 
 //
 
@@ -97,14 +118,20 @@ constexpr uint32_t CL_RECORD_MEASURED_VELOCITY				= 1u << 16;
 typedef __fp16 float16_t;			///< A 16-bit floating point type
 #endif
 
-// Total of the above is currently 34 bytes, plus 4 bytes for the time stamp = 38 bytes.
-// We can fit 56 bytes of data in each CAN data sample message.
+// A whole sample has to fit inside one CAN data message: CanMessageClosedLoopData carries data[56], and
+// the message is already exactly 64 bytes, which is the CAN-FD frame limit (see the
+// static_assert(sizeof(CanMessage) <= 64) at the end of CanMessageFormats.h). data[] therefore cannot be
+// grown, and the packing loop in the expansion board's DataTransmissionTaskLoop() writes one whole sample
+// at a time. Enabling every channel at once exceeds this - that is expected and is rejected by M569.5,
+// not worked around.
+constexpr size_t MaxClosedLoopSampleBytes = 56;
 
 // Calculate how much data there is from the bitmap of data to collect
 constexpr uint8_t ClosedLoopSampleLength(uint32_t valuesToCollect) noexcept
 {
-	// Size of each data item, in the same order as the CL_RECORD_ values declared in Duet3Common.h
-	constexpr uint8_t ClosedLoopDataSizes[17] =
+	// Size of each data item, in the same order as the CL_RECORD_ values declared above. See the
+	// INVARIANT note there before touching this.
+	constexpr uint8_t ClosedLoopDataSizes[NumClosedLoopRecordChannels] =
 	{
 		sizeof(int32_t),	// raw encoder reading
 		sizeof(float),		// current motor steps
@@ -116,13 +143,20 @@ constexpr uint8_t ClosedLoopSampleLength(uint32_t valuesToCollect) noexcept
 		sizeof(float16_t),	// PID D term
 		sizeof(uint16_t),	// current step phase
 		sizeof(uint16_t),	// desired step phase
-		sizeof(float16_t),	// phase shift
+		sizeof(uint16_t),	// phase shift (same 2 bytes as before; the label now matches what is written)
 		sizeof(int16_t),	// coil A current
 		sizeof(int16_t),	// coil B current
 		sizeof(float16_t),	// PID V term
 		sizeof(float16_t),	// PID A term
 		sizeof(float16_t),	// PID J term
-		sizeof(float16_t)	// Velocity term
+		sizeof(float16_t),	// Velocity term
+		sizeof(float16_t),	// phase current A, amps
+		sizeof(float16_t),	// phase current B, amps
+		sizeof(float16_t),	// phase current C, amps
+		sizeof(float16_t),	// d-axis current, amps
+		sizeof(float16_t),	// q-axis current, amps
+		sizeof(float16_t),	// d-axis voltage, volts
+		sizeof(float16_t)	// q-axis voltage, volts
 	};
 
 	uint8_t ret = sizeof(float);									// space for the time stamp
@@ -137,6 +171,18 @@ constexpr uint8_t ClosedLoopSampleLength(uint32_t valuesToCollect) noexcept
 	return ret;
 }
 
-constexpr size_t MaxClosedLoopSampleLength = ClosedLoopSampleLength(0x1FFFF);
+// True if a sample built from this filter fits in one CAN data message.
+constexpr bool ClosedLoopSampleFits(uint32_t valuesToCollect) noexcept
+{
+	return ClosedLoopSampleLength(valuesToCollect) <= MaxClosedLoopSampleBytes;
+}
+
+// Worst case over all channels. This exceeds MaxClosedLoopSampleBytes - enabling everything at once is
+// not a legal request - so anything sizing a buffer from it should clamp, see SampleBuffer.h.
+constexpr size_t MaxClosedLoopSampleLength = ClosedLoopSampleLength(CL_RECORD_ALL);
+
+// Largest sample that can actually be transmitted, and so the most any buffer needs to hold.
+constexpr size_t MaxUsableClosedLoopSampleLength =
+	(MaxClosedLoopSampleLength < MaxClosedLoopSampleBytes) ? MaxClosedLoopSampleLength : MaxClosedLoopSampleBytes;
 
 #endif /* SRC_DUET3COMMON_H_ */

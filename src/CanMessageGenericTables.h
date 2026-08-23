@@ -87,19 +87,42 @@ constexpr ParamDescriptor M569Point1Params[] =
 	FLOAT_PARAM('R'),
 	FLOAT_PARAM('I'),
 	FLOAT_PARAM('D'),
-	FLOAT_PARAM('h'),					// was 'H', no longer used, position retained for backwards compatibility (using lowercase 'h' means it won't be matched)
+	FLOAT_ARRAY_PARAM('F', 3),			// FOC current loop: {proportional gain, integral gain, max phase current in amps}.
+										// Occupies the retired 'H' slot (parked here as lowercase 'h') because the table was
+										// already full, and is one array rather than three letters for the same reason.
+										// Both ends must be flashed together. See doc/generic-message-tables.md
 	UINT16_PARAM('S'),					// steps/rev added for EXP1HCL firmware 3.5 compatibility
 	FLOAT_PARAM('V'),					// velocity feedforward term added in 3.5beta2
 	FLOAT_PARAM('A'),					// acceleration feedforward term added in 3.5beta4
 	FLOAT_PARAM('Q'),					// torque constant in Nm per A added in 3.5 post beta4
 	FLOAT_PARAM('J'),					// J
-//	FLOAT_PARAM('L'),					// Velocity I
+	UINT8_PARAM('L'),					// pole pair count (for BLDC/FOC motor types)
 	UINT8_PARAM('U'),					// tmc servo select
 	FLOAT_PARAM('W'),					// current
 	UINT8_PARAM('Z'),					// tmc phase select
 	REDUCED_STRING_PARAM('Y'),			// magnetic encoder type, added at 3.6.2
+	FLOAT_PARAM('N'),					// nominal motor supply voltage in volts (for FOC voltage scaling)
+	FLOAT_PARAM('O'),					// FOC voltage limit in volts; scales torqueMagnitude by O/N when both N and O are set
 	END_PARAMS
 };
+
+// THREE CONSTRAINTS ON EXTENDING ANY TABLE ABOVE. None of them announces itself: two produce silently
+// wrong behaviour and one produces a misleading error. Read doc/generic-message-tables.md before adding
+// a parameter.
+//
+//  1. A TABLE MAY NOT EXCEED 20 PARAMETERS. CanMessageGeneric::paramMap is a 20-bit bitfield, one bit per
+//     entry. Exceeding it neither fails to build nor fails at run time - the surplus bits are truncated,
+//     so those parameters are accepted by the sender and never arrive. The static_assert below makes it
+//     a compile error. M569Point1Params is AT the limit: anything further must displace an entry or be
+//     packed into an existing array.
+//  2. 'G' AND 'M' CANNOT BE USED AT ALL, in any table. StringParser treats them as the start of a new
+//     command and stops scanning parameters there. ('T' is fine - the parser special-cases it.)
+//  3. A RETIRED LETTER IS NOT A FREE LETTER. Retired entries are parked in lowercase to hold their bit
+//     position; reviving one gives a stale letter in an existing config the new meaning. Reusing the
+//     SLOT is fine, but it changes what that bit means on the wire, so both ends must be flashed together.
+//
+// Separately, message length: 4 bytes of header plus data[60] is exactly the CAN-FD frame and cannot grow.
+static_assert(ARRAY_SIZE(M569Point1Params) - 1 <= 20, "M569.1 parameter table exceeds the 20-bit paramMap");
 
 // Read or write stepper driver register
 constexpr ParamDescriptor M569Point2Params[] =
